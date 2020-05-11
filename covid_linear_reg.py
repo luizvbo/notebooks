@@ -24,6 +24,9 @@ from functools import partial
 from zipfile import ZipFile
 from glob import glob
 
+from multiprocessing import Pool
+
+
 from IPython.display import HTML, display
 
 RANDOM_SEED = 123
@@ -38,9 +41,6 @@ url_death = ("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/"
              "csse_covid_19_data/csse_covid_19_time_series/"
              "time_series_covid19_deaths_global.csv")
 url_pop = ("http://api.worldbank.org/v2/en/indicator/SP.POP.TOTL?downloadformat=csv")
-
-# %%
-# !unzip help
 
 # %% execution={"iopub.status.busy": "2020-05-11T16:17:25.023377Z", "iopub.execute_input": "2020-05-11T16:17:25.023795Z", "iopub.status.idle": "2020-05-11T16:17:26.450974Z", "shell.execute_reply.started": "2020-05-11T16:17:25.023757Z", "shell.execute_reply": "2020-05-11T16:17:26.448008Z"}
 # Getting the population information
@@ -75,8 +75,7 @@ def get_same_origin(df):
                       'constant', constant_values=np.nan)
 
     df = (
-        df
-        .apply(_pad_days, raw=True)
+        df.apply(_pad_days, raw=True)
         .reset_index(drop=True)
     ).dropna(how='all')
 
@@ -108,61 +107,8 @@ df = df[df.sum()[lambda s: s > 0].index]
 # # Shift all series to the origin (first death)
 df = get_same_origin(df)
 
-# %% execution={"iopub.status.busy": "2020-05-11T16:25:32.880337Z", "iopub.execute_input": "2020-05-11T16:25:32.880589Z", "iopub.status.idle": "2020-05-11T16:25:32.889061Z", "shell.execute_reply.started": "2020-05-11T16:25:32.880571Z", "shell.execute_reply": "2020-05-11T16:25:32.888485Z"}
-df_pop.sort_values('2018', ascending=True).head(40)
 
-# %% execution={"iopub.status.busy": "2020-05-11T11:28:46.210991Z", "iopub.execute_input": "2020-05-11T11:28:46.211226Z", "iopub.status.idle": "2020-05-11T11:28:46.216577Z", "shell.execute_reply.started": "2020-05-11T11:28:46.211208Z", "shell.execute_reply": "2020-05-11T11:28:46.215930Z"}
-import matplotlib.pyplot as plt
-
-def plot_us_br(arr_us, arr_br, arr_br_pred):
-    plt.plot(arr_us[:arr_br.shape[0]], arr_br)
-    plt.plot(arr_us, arr_br_pred, '--')
-    plt.xlabel('US')
-    plt.ylabel('Brazil')
-    plt.grid(True)
-
-arr_us = df['US'].dropna().values.reshape(-1, 1)
-arr_br = df['Brazil'].dropna().values.reshape(-1, 1)
-
-lr = LinearRegression()
-
-# %% execution={"iopub.status.busy": "2020-05-11T15:48:22.322452Z", "iopub.execute_input": "2020-05-11T15:48:22.322688Z", "iopub.status.idle": "2020-05-11T15:48:22.466810Z", "shell.execute_reply.started": "2020-05-11T15:48:22.322671Z", "shell.execute_reply": "2020-05-11T15:48:22.466269Z"}
-weigths = np.geomspace(1, 1000, arr_br.shape[0])
-# weigths[-1] = 200
-lr.fit(arr_us[:arr_br.shape[0]], arr_br, sample_weight=weigths)
-arr_br_pred = lr.predict(arr_us)
-
-print(lr.score(arr_us[:arr_br.shape[0]], arr_br))
-plot_us_br(arr_us, arr_br, arr_br_pred)
-
-# %% execution={"iopub.status.busy": "2020-05-11T11:26:16.790283Z", "iopub.execute_input": "2020-05-11T11:26:16.791638Z", "iopub.status.idle": "2020-05-11T11:26:16.950017Z", "shell.execute_reply.started": "2020-05-11T11:26:16.791519Z", "shell.execute_reply": "2020-05-11T11:26:16.949501Z"}
-lr.fit(arr_us[:arr_br.shape[0]], arr_br)
-arr_br_pred = lr.predict(arr_us)
-plot_us_br
-
-# %% execution={"iopub.status.busy": "2020-05-11T11:20:24.719023Z", "iopub.execute_input": "2020-05-11T11:20:24.719794Z", "iopub.status.idle": "2020-05-11T11:20:24.870903Z", "shell.execute_reply.started": "2020-05-11T11:20:24.719723Z", "shell.execute_reply": "2020-05-11T11:20:24.870397Z"}
-ax = df[['Brazil', 'US']].dropna().set_index('US').rename(columns={'Brazil': 'N. of deaths'}).plot(figsize=(8,8))
-ax.set_ylabel('Brazil')
-ax.grid(True)
-# ax.axis('equal')
-
-# %% execution={"iopub.status.busy": "2020-05-11T16:29:33.126148Z", "iopub.execute_input": "2020-05-11T16:29:33.126997Z", "iopub.status.idle": "2020-05-11T16:29:33.174221Z", "shell.execute_reply.started": "2020-05-11T16:29:33.126919Z", "shell.execute_reply": "2020-05-11T16:29:33.173596Z"}
-df
-
-# %% execution={"iopub.status.busy": "2020-05-11T16:27:46.807687Z", "iopub.execute_input": "2020-05-11T16:27:46.808496Z", "iopub.status.idle": "2020-05-11T16:27:46.828200Z", "shell.execute_reply.started": "2020-05-11T16:27:46.808389Z", "shell.execute_reply": "2020-05-11T16:27:46.827120Z"}
-df_pop
-
-# %% execution={"iopub.status.busy": "2020-05-11T16:39:30.353989Z", "iopub.execute_input": "2020-05-11T16:39:30.354544Z", "iopub.status.idle": "2020-05-11T16:39:32.794499Z", "shell.execute_reply.started": "2020-05-11T16:39:30.354493Z", "shell.execute_reply": "2020-05-11T16:39:32.793888Z"}
-from multiprocessing import Pool
-
-min_diff = 7
-all_columns = df.columns
-results = {}
-
-# Ignore countries with less than 1M 
-countries = [c for c in df.columns if c not in 
-             df_pop[lambda df_: df_['2018'] < 10**6].index]
-
+# %% execution={"iopub.status.busy": "2020-05-11T17:04:36.679984Z", "iopub.execute_input": "2020-05-11T17:04:36.680202Z", "iopub.status.idle": "2020-05-11T17:04:39.481860Z", "shell.execute_reply.started": "2020-05-11T17:04:36.680184Z", "shell.execute_reply": "2020-05-11T17:04:39.480482Z"}
 # def compute_lr_parallel(df_covid, min_df=7):
 def compute_lr(country, df_covid):
     """        
@@ -192,65 +138,95 @@ def compute_lr(country, df_covid):
             # The weights increase linearly from 1 to 2
             weights = np.linspace(1, 1, y.shape[0])
             lr.fit(x[:y.shape[0]], y, weights)
+            pred = lr.predict(x)
 
             results[(x_label, y_label)] = dict(
                     lr_model=lr, r_score=lr.score(x[:y.shape[0]], y),
-                    predictions=lr.predict(x),
-                    len_x=x.shape[0],
-                    len_y=y.shape[0],
+                    predicted=lr.predict(x),
+                    x=x,
+                    y=y,
             )
             
     return results
 
+min_diff = 7
+all_columns = df.columns
+results = {}
 
-
+# Ignore countries with less than 1M 
+countries = [c for c in df.columns if c not in 
+             df_pop[lambda df_: df_['2018'] < 10**6].index]
 
 compute_lr_parallel = partial(compute_lr, df_covid=df[countries])
 
 with Pool(8) as pool:
     results = {}
-    for res_dict in tqdm(pool.imap_unordered(compute_lr_parallel,
-                                             enumerate(countries)), 
+    for res_dict in tqdm(pool.imap(compute_lr_parallel, enumerate(countries)), 
                          total=df.shape[0]):
         results.update(res_dict)
-        
-
-# for i, col_1 in enumerate(tqdm(all_columns)):
-#     for col_2 in all_columns[i+1:]:
-
-#         x = df[col_1].dropna().values
-#         y = df[col_2].dropna().values
-
-#         # Keep the largest array in x
-#         if x.shape[0] < y.shape[0]:
-#             x, y = y, x
-#             x_label, y_label = col_2, col_1
-#         else:
-#             x_label, y_label = col_1, col_2
-
-#         x, y = x.reshape(-1, 1), y.reshape(-1, 1)
-
-#         if x.shape[0] - y.shape[0] > min_diff:
-#             lr = LinearRegression()
-#             # The weights increase linearly from 1 to 2
-#             weights = np.linspace(1, 1, y.shape[0])
-#             lr.fit(x[:y.shape[0]], y, weights)
-
-#             results[(x_label, y_label)] = dict(
-#                 lr_model=lr, r_score=lr.score(x[:y.shape[0]], y),
-#                 predictions=lr.predict(x),
-#                 len_x=x.shape[0],
-#                 len_y=y.shape[0],
-#             )
-
-# %% execution={"iopub.status.busy": "2020-05-11T16:39:33.045365Z", "iopub.execute_input": "2020-05-11T16:39:33.046467Z", "iopub.status.idle": "2020-05-11T16:39:33.127107Z", "shell.execute_reply.started": "2020-05-11T16:39:33.046260Z", "shell.execute_reply": "2020-05-11T16:39:33.126271Z"}
 df_results = pd.DataFrame.from_dict(results, orient='index')
 
-# %% execution={"iopub.status.busy": "2020-05-11T16:39:55.139597Z", "iopub.execute_input": "2020-05-11T16:39:55.139813Z", "iopub.status.idle": "2020-05-11T16:39:55.143234Z", "shell.execute_reply.started": "2020-05-11T16:39:55.139794Z", "shell.execute_reply": "2020-05-11T16:39:55.142743Z"}
-df_results.shape
+# %% execution={"iopub.status.busy": "2020-05-11T17:14:06.452581Z", "iopub.execute_input": "2020-05-11T17:14:06.452782Z", "iopub.status.idle": "2020-05-11T17:14:06.647023Z", "shell.execute_reply.started": "2020-05-11T17:14:06.452765Z", "shell.execute_reply": "2020-05-11T17:14:06.646500Z"}
+df_ = df_results[lambda df: (df.index.get_level_values(1) == 'Brazil') &
+                 (df.r_score > 0.95)].sort_values('r_score', ascending=False).head(10)
 
-# %% execution={"iopub.status.busy": "2020-05-11T16:39:35.236752Z", "iopub.execute_input": "2020-05-11T16:39:35.236967Z", "iopub.status.idle": "2020-05-11T16:39:35.415298Z", "shell.execute_reply.started": "2020-05-11T16:39:35.236948Z", "shell.execute_reply": "2020-05-11T16:39:35.414763Z"}
-df_results[lambda df: (df.index.get_level_values(1) == 'Brazil')].sort_values('r_score', ascending=False).head(40)
+
+# %% execution={"iopub.status.busy": "2020-05-11T17:26:27.733957Z", "iopub.execute_input": "2020-05-11T17:26:27.734248Z", "iopub.status.idle": "2020-05-11T17:26:29.092966Z", "shell.execute_reply.started": "2020-05-11T17:26:27.734226Z", "shell.execute_reply": "2020-05-11T17:26:29.092404Z"}
+from scipy.stats import pearsonr
+
+# lambda row: pearsonr(row['x'][:row['y'].shape[0]], row['y'])
+
+df_ = (
+    df_results
+    .assign(rho=lambda df: df.apply(lambda row: pearsonr(row['x'][:row['y'].shape[0]].flatten(), 
+                                                         row['y'].flatten())[0], axis=1))
+    .assign(rho_sq=lambda df: df.rho**2)
+    .assign(diff=lambda df: abs(df.rho_sq-df.r_score))
+)
+
+
+# %% execution={"iopub.status.busy": "2020-05-11T17:38:24.549622Z", "iopub.execute_input": "2020-05-11T17:38:24.550518Z", "iopub.status.idle": "2020-05-11T17:38:25.397595Z", "shell.execute_reply.started": "2020-05-11T17:38:24.550430Z", "shell.execute_reply": "2020-05-11T17:38:25.396991Z"}
+def plot_candidates(df_candidates, nrows=4, ncols=2, over_days=True):
+    fig, axs = plt.subplots(nrows, ncols)
+    df_ = df_candidates.head(nrows * ncols)
+    for (i, row), ax in zip(df_.iterrows(), axs.flatten()):
+        if over_days:
+            ax.plot(row['x'], label=i[0])
+            ax.plot(row['y'], label=i[1])
+            ax.plot(row['predicted'], '--', label=f"{i[1]} (predicted)")
+            ax.title.set_text("$r^2={:.3f}$".format(row['r_score']))
+        else:
+            ax.plot(row['x'][:row['y'].shape[0]], row['y'], label='True value')
+            ax.plot(row['x'], row['predicted'], '--', label='Predicted')
+            ax.set_xlabel(i[0])
+            ax.set_ylabel(i[1])
+        
+        ax.grid(True)
+        legend = ax.legend(loc='upper left')#, shadow=True, fontsize='x-large')
+
+    fig.set_size_inches(10, 15)
+
+df_ = df_results[lambda df: (df.index.get_level_values(1) == 'Brazil')].sort_values('r_score', ascending=False)
+plot_candidates(df_, over_days=False)
+
+
+# %%
+def plot_candidates(df_candidates, nrows=4, ncols=2):
+    fig, axs = plt.subplots(nrows, ncols)
+    df_ = df_candidates.head(nrows * ncols)
+    for (i, row), ax in zip(df_.iterrows(), axs.flatten()):
+        ax.plot(row['x'], label=i[0])
+        ax.plot(row['y'], label=i[1])
+        ax.plot(row['predicted'], '--', label=f"{i[1]} (predicted)")
+        ax.title.set_text("$r^2={:.3f}$".format(row['r_score']))
+        
+        ax.grid(True)
+        legend = ax.legend(loc='upper left')#, shadow=True, fontsize='x-large')
+
+    fig.set_size_inches(10, 15)
+
+df_ = df_results[lambda df: (df.index.get_level_values(1) == 'Brazil')].sort_values('r_score', ascending=False)
+plot_candidates(df_)
 
 # %% execution={"iopub.status.busy": "2020-05-11T16:41:29.184699Z", "iopub.execute_input": "2020-05-11T16:41:29.185010Z", "iopub.status.idle": "2020-05-11T16:41:29.195118Z", "shell.execute_reply.started": "2020-05-11T16:41:29.184983Z", "shell.execute_reply": "2020-05-11T16:41:29.194325Z"}
 df_results.r_score[lambda s: s > 0.95]#.plot.hist(bins=30)
