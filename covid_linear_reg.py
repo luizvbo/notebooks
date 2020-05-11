@@ -28,7 +28,8 @@
 #
 # I used the data provided by the Johns Hopkins University Center for Systems Science and Engineering (JHU CSSE) in their [GitHub repository](https://github.com/CSSEGISandData/COVID-19).
 
-# %% execution={"iopub.status.busy": "2020-05-11T18:58:09.905534Z", "iopub.execute_input": "2020-05-11T18:58:09.906362Z", "iopub.status.idle": "2020-05-11T18:58:10.741596Z", "shell.execute_reply.started": "2020-05-11T18:58:09.906300Z", "shell.execute_reply": "2020-05-11T18:58:10.740943Z"}
+# %% execution={"iopub.status.busy": "2020-05-11T20:03:16.776484Z", "iopub.execute_input": "2020-05-11T20:03:16.776689Z", "iopub.status.idle": "2020-05-11T20:03:16.779947Z", "shell.execute_reply.started": "2020-05-11T20:03:16.776672Z", "shell.execute_reply": "2020-05-11T20:03:16.779387Z"}
+from typing import Tuple, Dict
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
@@ -39,7 +40,7 @@ from multiprocessing import Pool
 import matplotlib.pyplot as plt
 
 
-# %% execution={"iopub.status.busy": "2020-05-11T18:58:10.742459Z", "iopub.execute_input": "2020-05-11T18:58:10.742652Z", "iopub.status.idle": "2020-05-11T18:58:10.745437Z", "shell.execute_reply.started": "2020-05-11T18:58:10.742633Z", "shell.execute_reply": "2020-05-11T18:58:10.744833Z"}
+# %% execution={"iopub.status.busy": "2020-05-11T20:03:17.109956Z", "iopub.execute_input": "2020-05-11T20:03:17.110342Z", "iopub.status.idle": "2020-05-11T20:03:17.114055Z", "shell.execute_reply.started": "2020-05-11T20:03:17.110308Z", "shell.execute_reply": "2020-05-11T20:03:17.113289Z"}
 # URL to the CSSE repository
 url_covid_death = ("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/"
                    "master/csse_covid_19_data/csse_covid_19_time_series/"
@@ -49,10 +50,16 @@ url_pop = ("http://api.worldbank.org/v2/en/indicator/"
            "SP.POP.TOTL?downloadformat=csv")
 
 
-# %% execution={"iopub.status.busy": "2020-05-11T18:58:10.860735Z", "iopub.execute_input": "2020-05-11T18:58:10.861635Z", "iopub.status.idle": "2020-05-11T18:58:10.898437Z", "shell.execute_reply.started": "2020-05-11T18:58:10.861551Z", "shell.execute_reply": "2020-05-11T18:58:10.897608Z"}
-def get_same_origin(df):
-    """
+# %% execution={"iopub.status.busy": "2020-05-11T20:03:17.489096Z", "iopub.execute_input": "2020-05-11T20:03:17.489801Z", "iopub.status.idle": "2020-05-11T20:03:17.522925Z", "shell.execute_reply.started": "2020-05-11T20:03:17.489736Z", "shell.execute_reply": "2020-05-11T20:03:17.522086Z"}
+def get_same_origin(df: pd.DataFrame) -> pd.DataFrame:
+    """Move first case to the origing
 
+    Args:
+        df (pd.DataFrame): Input data frame, where each column corresponds to
+        one country. It should be the output of the function `set_index`.
+
+    Returns:
+        pd.DataFrame: Data frame with every column shifted up
     """
     n_days = df.shape[0]
 
@@ -70,11 +77,14 @@ def get_same_origin(df):
     return df
 
 
-def set_index(df):
+def set_index(df: pd.DataFrame) -> pd.DataFrame:
     """Set the index for the data frame using the date
 
     Args:
-        df: Pandas data frame obtained from John Hopkins repo
+        df (pd.DataFrame): Data frame obtained from John Hopkins repo
+
+    Returns:
+        pd.DataFrame: Preprocessed data
     """
     # Set region, country, lat and long as index
     index = pd.MultiIndex.from_frame(df.iloc[:, :4])
@@ -84,11 +94,22 @@ def set_index(df):
     return df.set_index(pd.to_datetime(df.index, dayfirst=False))
 
 
-def compute_lr(country, df_covid, min_diff=7):
-    """
-    Params:
-        country: It's  a tuple with the index of the
-            country and the country
+def compute_lr(country: Tuple[int, str], df_covid: pd.DataFrame,
+               min_diff: int = 7) -> Dict[Tuple[str, str], Dict]:
+    """Fit the logistic regression for each pair of countries
+
+    Args:
+        country (Tuple[int, str]): Tuple with the index of the
+            country in the column list and the country
+        df_covid (pd.DataFrame): Data frame containing the data shifted to
+            the origin.
+        min_diff (int, optional): Minimum difference in the number of days to
+            consider the country pair. Defaults to 7.
+
+    Returns:
+        Dict[Tuple[str, str], Dict]: Dictionary where the keys are the pairs
+            of countries and the value is a data dictionary with the data
+            computued.
     """
     i, col_1 = country
     results = {}
@@ -112,7 +133,6 @@ def compute_lr(country, df_covid, min_diff=7):
             # The weights increase linearly from 1 to 2
             weights = np.linspace(1, 1, y.shape[0])
             lr.fit(x[:y.shape[0]], y, weights)
-            pred = lr.predict(x)
 
             results[(x_label, y_label)] = dict(
                 lr_model=lr,
@@ -123,7 +143,27 @@ def compute_lr(country, df_covid, min_diff=7):
 
     return results
 
-def plot_candidates(df_candidates, nrows=4, ncols=2, over_days=True, figsize=(12, 15)):
+
+def plot_candidates(df_candidates: pd.DataFrame,
+                    nrows: int = 4, ncols: int = 2,
+                    over_days: bool = True,
+                    figsize: Tuple[int, int] = (12, 15)):
+    """Plot the regression for pairs of countries
+
+    Args:
+        df_candidates (pd.DataFrame): Data frame with pairs of countries with
+            the linear regression data
+
+        nrows (int, optional): Number of rows to plot. Defaults to 4.
+        ncols (int, optional): NBumber of columns to plot. Defaults to 2.
+        over_days (bool, optional): If True, plot the data over days.
+            Otherwise, plot one country agains the other. Defaults to True.
+        figsize (Tuple[int, int], optional): Size of the resulting fiture.
+            Defaults to (12, 15).
+
+    Returns:
+        [type]: Figure object
+    """
     fig, axs = plt.subplots(nrows, ncols)
     df_ = df_candidates.head(nrows * ncols)
     for (i, row), ax in zip(df_.iterrows(), axs.flatten()):
@@ -140,14 +180,14 @@ def plot_candidates(df_candidates, nrows=4, ncols=2, over_days=True, figsize=(12
             ax.set_ylabel(i[1])
 
         ax.grid(True)
-        legend = ax.legend(title="$r^2={:.3f}$".format(row['r_score']),
-                           loc='upper left')
+        ax.legend(title="$r^2={:.3f}$".format(row['r_score']),
+                  loc='upper left')
 
     fig.set_size_inches(*figsize)
     return fig
 
 
-# %% execution={"iopub.status.busy": "2020-05-11T18:58:11.644956Z", "iopub.execute_input": "2020-05-11T18:58:11.645974Z", "iopub.status.idle": "2020-05-11T18:58:14.226952Z", "shell.execute_reply.started": "2020-05-11T18:58:11.645875Z", "shell.execute_reply": "2020-05-11T18:58:14.225506Z"}
+# %% execution={"iopub.status.busy": "2020-05-11T20:03:17.970668Z", "iopub.execute_input": "2020-05-11T20:03:17.971493Z", "iopub.status.idle": "2020-05-11T20:03:19.621639Z", "shell.execute_reply.started": "2020-05-11T20:03:17.971410Z", "shell.execute_reply": "2020-05-11T20:03:19.618486Z"}
 # Getting the population information
 # !wget {url_pop} -O pop.zip
 # !unzip -o pop.zip -d pop_csv
@@ -157,12 +197,11 @@ df_pop = df_pop_[['Country Name', '2018']].set_index('Country Name')
 # Delete the files downloaded
 # !rm -r pop_csv
 
-# %% execution={"iopub.status.busy": "2020-05-11T18:58:14.229227Z", "iopub.execute_input": "2020-05-11T18:58:14.229597Z", "iopub.status.idle": "2020-05-11T18:58:14.677704Z", "shell.execute_reply.started": "2020-05-11T18:58:14.229561Z", "shell.execute_reply": "2020-05-11T18:58:14.676594Z"}
+# %% execution={"iopub.status.busy": "2020-05-11T20:04:51.856701Z", "iopub.execute_input": "2020-05-11T20:04:51.856901Z", "iopub.status.idle": "2020-05-11T20:04:52.289655Z", "shell.execute_reply.started": "2020-05-11T20:04:51.856883Z", "shell.execute_reply": "2020-05-11T20:04:52.288828Z"}
 # Loading the data for the number of Deaths
 df_death = pd.read_csv(url_covid_death)
 
-# %% execution={"iopub.status.busy": "2020-05-11T18:58:14.679170Z", "iopub.execute_input": "2020-05-11T18:58:14.679466Z", "iopub.status.idle": "2020-05-11T18:58:14.732718Z", "shell.execute_reply.started": "2020-05-11T18:58:14.679440Z", "shell.execute_reply": "2020-05-11T18:58:14.732050Z"}
-df = set_index(df_death.copy())
+df = set_index(df_death)
 
 # Groupy territories per country
 df = df.groupby(level=1, axis=1).sum()
@@ -173,7 +212,7 @@ df = df[df.sum()[lambda s: s > 0].index]
 # # Shift all series to the origin (first death)
 df = get_same_origin(df)
 
-# %% execution={"iopub.status.busy": "2020-05-11T18:58:14.783169Z", "iopub.execute_input": "2020-05-11T18:58:14.783391Z", "iopub.status.idle": "2020-05-11T18:58:17.879591Z", "shell.execute_reply.started": "2020-05-11T18:58:14.783373Z", "shell.execute_reply": "2020-05-11T18:58:17.878952Z"}
+# %% execution={"iopub.status.busy": "2020-05-11T20:04:52.290526Z", "iopub.execute_input": "2020-05-11T20:04:52.290765Z", "iopub.status.idle": "2020-05-11T20:04:55.317542Z", "shell.execute_reply.started": "2020-05-11T20:04:52.290726Z", "shell.execute_reply": "2020-05-11T20:04:55.316771Z"}
 # Ignore countries with less than 1M
 countries = [c for c in df.columns if c not in
              df_pop[lambda df_: df_['2018'] < 10**6].index]
@@ -187,11 +226,21 @@ with Pool(8) as pool:
         results.update(res_dict)
 df_results = pd.DataFrame.from_dict(results, orient='index')
 
-# %% execution={"iopub.status.busy": "2020-05-11T18:58:18.340275Z", "iopub.execute_input": "2020-05-11T18:58:18.340799Z", "iopub.status.idle": "2020-05-11T18:58:19.490409Z", "shell.execute_reply.started": "2020-05-11T18:58:18.340746Z", "shell.execute_reply": "2020-05-11T18:58:19.489746Z"}
+# %% [markdown]
+# # Plots
+#
+# ## Linear Regression Results
+#
+# The first set of figures shows the output for the linear regression, considering the number of deaths from Brazil as the response variable (y-axis) and each of the other countries as the dependent variable (x-axis). 
+
+# %% execution={"iopub.status.busy": "2020-05-11T20:06:01.139469Z", "iopub.execute_input": "2020-05-11T20:06:01.140685Z", "iopub.status.idle": "2020-05-11T20:06:02.272795Z", "shell.execute_reply.started": "2020-05-11T20:06:01.140542Z", "shell.execute_reply": "2020-05-11T20:06:02.271988Z"}
 df_brazil = df_results[lambda df: (df.index.get_level_values(1) == 'Brazil')].sort_values('r_score', ascending=False)
-fig1 = plot_candidates(df_, over_days=True)
+fig1 = plot_candidates(df_brazil, over_days=False)
 
-# %% execution={"iopub.status.busy": "2020-05-11T18:58:27.907924Z", "iopub.execute_input": "2020-05-11T18:58:27.909053Z", "iopub.status.idle": "2020-05-11T18:58:28.995842Z", "shell.execute_reply.started": "2020-05-11T18:58:27.908950Z", "shell.execute_reply": "2020-05-11T18:58:28.995325Z"}
-fig2 = plot_candidates(df_brazil, over_days=False)
+# %% [markdown]
+# ## Predictions
+#
+# The second set shows the prediction, for the number of deaths in Brazil, according to the line fitted to each of the other countries. The number of days in future is limited by the data available for the other country.
 
-# %%
+# %% execution={"iopub.status.busy": "2020-05-11T20:06:43.286421Z", "iopub.execute_input": "2020-05-11T20:06:43.287143Z", "iopub.status.idle": "2020-05-11T20:06:44.342340Z", "shell.execute_reply.started": "2020-05-11T20:06:43.287080Z", "shell.execute_reply": "2020-05-11T20:06:44.341724Z"}
+fig2 = plot_candidates(df_, over_days=True)
