@@ -13,59 +13,47 @@
 #     name: python3
 # ---
 
-# %% execution={"iopub.status.busy": "2020-05-11T16:06:37.924277Z", "iopub.execute_input": "2020-05-11T16:06:37.924626Z", "iopub.status.idle": "2020-05-11T16:06:37.928441Z", "shell.execute_reply.started": "2020-05-11T16:06:37.924605Z", "shell.execute_reply": "2020-05-11T16:06:37.927918Z"}
+# %% [markdown]
+# # Predicting COVID-19 Deaths by Similarity
+#
+# I have been seen some discussion about epidemiologic models to predict the number of cases and deaths by COVID-19, which made me give some thought about the subject.
+#
+# Since we have countries in different stages of the pandemic, my hypothesis was that we could use information from countries in advanced stages to predict information for countries at the beginning of the crisis.
+#
+# Considering the number of deaths by COVID-19 registered, we can align the data for all countries, such that the day the first death by COVID-19 was registered for each country coincides with the origin.
+#
+# With the data shifted, we can compute the correlation between each pair of countries and then find those pairs with high correlation. We can fit a linear regression to each of these pairs considering the country with more data as the independent variable and the one with fewer data as the response variable.
+#
+# We can then use the data for the country with more data to predict the number of deaths for the other country. For, instance, for Brazil, the 8 highest correlated countries are Canada, USA, Egypt, Japan, Argentina, UK, Italy and Iran (all of them with correlation > 0.95).
+#
+# I used the data provided by the Johns Hopkins University Center for Systems Science and Engineering (JHU CSSE) in their [GitHub repository](https://github.com/CSSEGISandData/COVID-19).
+
+# %% execution={"iopub.status.busy": "2020-05-11T18:58:09.905534Z", "iopub.execute_input": "2020-05-11T18:58:09.906362Z", "iopub.status.idle": "2020-05-11T18:58:10.741596Z", "shell.execute_reply.started": "2020-05-11T18:58:09.906300Z", "shell.execute_reply": "2020-05-11T18:58:10.740943Z"}
 import pandas as pd
-import cufflinks as cf
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import r2_score
 from tqdm import tqdm
 from functools import partial
-from zipfile import ZipFile
 from glob import glob
-
 from multiprocessing import Pool
+import matplotlib.pyplot as plt
 
 
-from IPython.display import HTML, display
-
-RANDOM_SEED = 123
-
-np.random.seed(RANDOM_SEED)
-
-# %% execution={"iopub.status.busy": "2020-05-11T16:04:54.106492Z", "iopub.execute_input": "2020-05-11T16:04:54.106707Z", "iopub.status.idle": "2020-05-11T16:04:54.109691Z", "shell.execute_reply.started": "2020-05-11T16:04:54.106687Z", "shell.execute_reply": "2020-05-11T16:04:54.109155Z"}
-url_cases = ("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/"
-             "csse_covid_19_data/csse_covid_19_time_series/"
-             "time_series_covid19_confirmed_global.csv")
-url_death = ("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/"
-             "csse_covid_19_data/csse_covid_19_time_series/"
-             "time_series_covid19_deaths_global.csv")
-url_pop = ("http://api.worldbank.org/v2/en/indicator/SP.POP.TOTL?downloadformat=csv")
-
-# %% execution={"iopub.status.busy": "2020-05-11T16:17:25.023377Z", "iopub.execute_input": "2020-05-11T16:17:25.023795Z", "iopub.status.idle": "2020-05-11T16:17:26.450974Z", "shell.execute_reply.started": "2020-05-11T16:17:25.023757Z", "shell.execute_reply": "2020-05-11T16:17:26.448008Z"}
-# Getting the population information
-# !wget {url_pop} -O pop.zip
-# !unzip -o pop.zip -d pop_csv
-# Load the population file
-df_pop_ = pd.read_csv(glob('pop_csv/API_SP.POP.TOTL*.csv')[0],  skiprows=4)
-df_pop = df_pop_[['Country Name', '2018']].set_index('Country Name')
-# Delete the files downloaded
-# !rm -r pop_csv
-
-# %% execution={"iopub.status.busy": "2020-05-11T15:50:37.879460Z", "iopub.execute_input": "2020-05-11T15:50:37.880059Z", "iopub.status.idle": "2020-05-11T15:50:38.685680Z", "shell.execute_reply.started": "2020-05-11T15:50:37.880003Z", "shell.execute_reply": "2020-05-11T15:50:38.684529Z"}
-df_death = pd.read_csv(death)
-df_cases = pd.read_csv(cases)
+# %% execution={"iopub.status.busy": "2020-05-11T18:58:10.742459Z", "iopub.execute_input": "2020-05-11T18:58:10.742652Z", "iopub.status.idle": "2020-05-11T18:58:10.745437Z", "shell.execute_reply.started": "2020-05-11T18:58:10.742633Z", "shell.execute_reply": "2020-05-11T18:58:10.744833Z"}
+# URL to the CSSE repository
+url_covid_death = ("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/"
+                   "master/csse_covid_19_data/csse_covid_19_time_series/"
+                   "time_series_covid19_deaths_global.csv")
+# URL to the population data from Worldbank
+url_pop = ("http://api.worldbank.org/v2/en/indicator/"
+           "SP.POP.TOTL?downloadformat=csv")
 
 
-# %% execution={"iopub.status.busy": "2020-05-11T16:21:48.942045Z", "iopub.execute_input": "2020-05-11T16:21:48.942250Z", "iopub.status.idle": "2020-05-11T16:21:48.982072Z", "shell.execute_reply.started": "2020-05-11T16:21:48.942232Z", "shell.execute_reply": "2020-05-11T16:21:48.981488Z"}
-def iplot_nb(self, *args, **kwargs):
-    fig = self.iplot(asFigure=True, *args, **kwargs)
-    display(HTML(fig.to_html()))
-    
-
-pd.DataFrame.iplot_nb = iplot_nb
-
+# %% execution={"iopub.status.busy": "2020-05-11T18:58:10.860735Z", "iopub.execute_input": "2020-05-11T18:58:10.861635Z", "iopub.status.idle": "2020-05-11T18:58:10.898437Z", "shell.execute_reply.started": "2020-05-11T18:58:10.861551Z", "shell.execute_reply": "2020-05-11T18:58:10.897608Z"}
 def get_same_origin(df):
+    """
+
+    """
     n_days = df.shape[0]
 
     def _pad_days(s):
@@ -96,34 +84,20 @@ def set_index(df):
     return df.set_index(pd.to_datetime(df.index, dayfirst=False))
 
 
-df = set_index(df_death.copy())
-
-# Groupy territories per country
-df = df.groupby(level=1, axis=1).sum()
-
-# # Drop all-zeros columns
-df = df[df.sum()[lambda s: s > 0].index]
-
-# # Shift all series to the origin (first death)
-df = get_same_origin(df)
-
-
-# %% execution={"iopub.status.busy": "2020-05-11T17:04:36.679984Z", "iopub.execute_input": "2020-05-11T17:04:36.680202Z", "iopub.status.idle": "2020-05-11T17:04:39.481860Z", "shell.execute_reply.started": "2020-05-11T17:04:36.680184Z", "shell.execute_reply": "2020-05-11T17:04:39.480482Z"}
-# def compute_lr_parallel(df_covid, min_df=7):
-def compute_lr(country, df_covid):
-    """        
+def compute_lr(country, df_covid, min_diff=7):
+    """
     Params:
-        country: It's  a tuple with the index of the 
+        country: It's  a tuple with the index of the
             country and the country
     """
     i, col_1 = country
     results = {}
-    
+
     for col_2 in df_covid.columns[i+1:]:
 
         x = df_covid[col_1].dropna().values
         y = df_covid[col_2].dropna().values
-      
+
         # Keep the largest array in x
         if x.shape[0] < y.shape[0]:
             x, y = y, x
@@ -141,33 +115,14 @@ def compute_lr(country, df_covid):
             pred = lr.predict(x)
 
             results[(x_label, y_label)] = dict(
-                    lr_model=lr, r_score=lr.score(x[:y.shape[0]], y),
-                    predicted=lr.predict(x),
-                    x=x,
-                    y=y,
+                lr_model=lr,
+                r_score=lr.score(x[:y.shape[0]], y),
+                predicted=lr.predict(x),
+                x=x, y=y,
             )
-            
+
     return results
 
-min_diff = 7
-all_columns = df.columns
-results = {}
-
-# Ignore countries with less than 1M 
-countries = [c for c in df.columns if c not in 
-             df_pop[lambda df_: df_['2018'] < 10**6].index]
-
-compute_lr_parallel = partial(compute_lr, df_covid=df[countries])
-
-with Pool(8) as pool:
-    results = {}
-    for res_dict in tqdm(pool.imap(compute_lr_parallel, enumerate(countries)), 
-                         total=df.shape[0]):
-        results.update(res_dict)
-df_results = pd.DataFrame.from_dict(results, orient='index')
-
-
-# %% execution={"iopub.status.busy": "2020-05-11T17:49:26.222507Z", "iopub.execute_input": "2020-05-11T17:49:26.222861Z", "iopub.status.idle": "2020-05-11T17:49:28.211464Z", "shell.execute_reply.started": "2020-05-11T17:49:26.222831Z", "shell.execute_reply": "2020-05-11T17:49:28.210932Z"}
 def plot_candidates(df_candidates, nrows=4, ncols=2, over_days=True, figsize=(12, 15)):
     fig, axs = plt.subplots(nrows, ncols)
     df_ = df_candidates.head(nrows * ncols)
@@ -183,16 +138,60 @@ def plot_candidates(df_candidates, nrows=4, ncols=2, over_days=True, figsize=(12
             ax.plot(row['x'], row['predicted'], '--', label='Predicted')
             ax.set_xlabel(i[0])
             ax.set_ylabel(i[1])
-                    
+
         ax.grid(True)
-        legend = ax.legend(title="$r^2={:.3f}$".format(row['r_score']), 
+        legend = ax.legend(title="$r^2={:.3f}$".format(row['r_score']),
                            loc='upper left')
 
     fig.set_size_inches(*figsize)
     return fig
 
-df_ = df_results[lambda df: (df.index.get_level_values(1) == 'Brazil')].sort_values('r_score', ascending=False)
+
+# %% execution={"iopub.status.busy": "2020-05-11T18:58:11.644956Z", "iopub.execute_input": "2020-05-11T18:58:11.645974Z", "iopub.status.idle": "2020-05-11T18:58:14.226952Z", "shell.execute_reply.started": "2020-05-11T18:58:11.645875Z", "shell.execute_reply": "2020-05-11T18:58:14.225506Z"}
+# Getting the population information
+# !wget {url_pop} -O pop.zip
+# !unzip -o pop.zip -d pop_csv
+# Load the population file
+df_pop_ = pd.read_csv(glob('pop_csv/API_SP.POP.TOTL*.csv')[0],  skiprows=4)
+df_pop = df_pop_[['Country Name', '2018']].set_index('Country Name')
+# Delete the files downloaded
+# !rm -r pop_csv
+
+# %% execution={"iopub.status.busy": "2020-05-11T18:58:14.229227Z", "iopub.execute_input": "2020-05-11T18:58:14.229597Z", "iopub.status.idle": "2020-05-11T18:58:14.677704Z", "shell.execute_reply.started": "2020-05-11T18:58:14.229561Z", "shell.execute_reply": "2020-05-11T18:58:14.676594Z"}
+# Loading the data for the number of Deaths
+df_death = pd.read_csv(url_covid_death)
+
+# %% execution={"iopub.status.busy": "2020-05-11T18:58:14.679170Z", "iopub.execute_input": "2020-05-11T18:58:14.679466Z", "iopub.status.idle": "2020-05-11T18:58:14.732718Z", "shell.execute_reply.started": "2020-05-11T18:58:14.679440Z", "shell.execute_reply": "2020-05-11T18:58:14.732050Z"}
+df = set_index(df_death.copy())
+
+# Groupy territories per country
+df = df.groupby(level=1, axis=1).sum()
+
+# # Drop all-zeros columns
+df = df[df.sum()[lambda s: s > 0].index]
+
+# # Shift all series to the origin (first death)
+df = get_same_origin(df)
+
+# %% execution={"iopub.status.busy": "2020-05-11T18:58:14.783169Z", "iopub.execute_input": "2020-05-11T18:58:14.783391Z", "iopub.status.idle": "2020-05-11T18:58:17.879591Z", "shell.execute_reply.started": "2020-05-11T18:58:14.783373Z", "shell.execute_reply": "2020-05-11T18:58:17.878952Z"}
+# Ignore countries with less than 1M
+countries = [c for c in df.columns if c not in
+             df_pop[lambda df_: df_['2018'] < 10**6].index]
+
+compute_lr_parallel = partial(compute_lr, df_covid=df[countries])
+
+with Pool(8) as pool:
+    results = {}
+    for res_dict in tqdm(pool.imap(compute_lr_parallel, enumerate(countries)),
+                         total=df.shape[0]):
+        results.update(res_dict)
+df_results = pd.DataFrame.from_dict(results, orient='index')
+
+# %% execution={"iopub.status.busy": "2020-05-11T18:58:18.340275Z", "iopub.execute_input": "2020-05-11T18:58:18.340799Z", "iopub.status.idle": "2020-05-11T18:58:19.490409Z", "shell.execute_reply.started": "2020-05-11T18:58:18.340746Z", "shell.execute_reply": "2020-05-11T18:58:19.489746Z"}
+df_brazil = df_results[lambda df: (df.index.get_level_values(1) == 'Brazil')].sort_values('r_score', ascending=False)
 fig1 = plot_candidates(df_, over_days=True)
 
-# %% execution={"iopub.status.busy": "2020-05-11T17:51:14.242408Z", "iopub.execute_input": "2020-05-11T17:51:14.243323Z", "iopub.status.idle": "2020-05-11T17:51:15.176063Z", "shell.execute_reply.started": "2020-05-11T17:51:14.243241Z", "shell.execute_reply": "2020-05-11T17:51:15.175534Z"}
-fig2 = plot_candidates(df_, over_days=False)
+# %% execution={"iopub.status.busy": "2020-05-11T18:58:27.907924Z", "iopub.execute_input": "2020-05-11T18:58:27.909053Z", "iopub.status.idle": "2020-05-11T18:58:28.995842Z", "shell.execute_reply.started": "2020-05-11T18:58:27.908950Z", "shell.execute_reply": "2020-05-11T18:58:28.995325Z"}
+fig2 = plot_candidates(df_brazil, over_days=False)
+
+# %%
