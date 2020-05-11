@@ -166,27 +166,9 @@ with Pool(8) as pool:
         results.update(res_dict)
 df_results = pd.DataFrame.from_dict(results, orient='index')
 
-# %% execution={"iopub.status.busy": "2020-05-11T17:14:06.452581Z", "iopub.execute_input": "2020-05-11T17:14:06.452782Z", "iopub.status.idle": "2020-05-11T17:14:06.647023Z", "shell.execute_reply.started": "2020-05-11T17:14:06.452765Z", "shell.execute_reply": "2020-05-11T17:14:06.646500Z"}
-df_ = df_results[lambda df: (df.index.get_level_values(1) == 'Brazil') &
-                 (df.r_score > 0.95)].sort_values('r_score', ascending=False).head(10)
 
-
-# %% execution={"iopub.status.busy": "2020-05-11T17:26:27.733957Z", "iopub.execute_input": "2020-05-11T17:26:27.734248Z", "iopub.status.idle": "2020-05-11T17:26:29.092966Z", "shell.execute_reply.started": "2020-05-11T17:26:27.734226Z", "shell.execute_reply": "2020-05-11T17:26:29.092404Z"}
-from scipy.stats import pearsonr
-
-# lambda row: pearsonr(row['x'][:row['y'].shape[0]], row['y'])
-
-df_ = (
-    df_results
-    .assign(rho=lambda df: df.apply(lambda row: pearsonr(row['x'][:row['y'].shape[0]].flatten(), 
-                                                         row['y'].flatten())[0], axis=1))
-    .assign(rho_sq=lambda df: df.rho**2)
-    .assign(diff=lambda df: abs(df.rho_sq-df.r_score))
-)
-
-
-# %% execution={"iopub.status.busy": "2020-05-11T17:38:24.549622Z", "iopub.execute_input": "2020-05-11T17:38:24.550518Z", "iopub.status.idle": "2020-05-11T17:38:25.397595Z", "shell.execute_reply.started": "2020-05-11T17:38:24.550430Z", "shell.execute_reply": "2020-05-11T17:38:25.396991Z"}
-def plot_candidates(df_candidates, nrows=4, ncols=2, over_days=True):
+# %% execution={"iopub.status.busy": "2020-05-11T17:49:26.222507Z", "iopub.execute_input": "2020-05-11T17:49:26.222861Z", "iopub.status.idle": "2020-05-11T17:49:28.211464Z", "shell.execute_reply.started": "2020-05-11T17:49:26.222831Z", "shell.execute_reply": "2020-05-11T17:49:28.210932Z"}
+def plot_candidates(df_candidates, nrows=4, ncols=2, over_days=True, figsize=(12, 15)):
     fig, axs = plt.subplots(nrows, ncols)
     df_ = df_candidates.head(nrows * ncols)
     for (i, row), ax in zip(df_.iterrows(), axs.flatten()):
@@ -194,59 +176,23 @@ def plot_candidates(df_candidates, nrows=4, ncols=2, over_days=True):
             ax.plot(row['x'], label=i[0])
             ax.plot(row['y'], label=i[1])
             ax.plot(row['predicted'], '--', label=f"{i[1]} (predicted)")
-            ax.title.set_text("$r^2={:.3f}$".format(row['r_score']))
+            ax.set_xlabel("Days since the first death by COVID-19")
+            ax.set_ylabel("Number of deaths")
         else:
             ax.plot(row['x'][:row['y'].shape[0]], row['y'], label='True value')
             ax.plot(row['x'], row['predicted'], '--', label='Predicted')
             ax.set_xlabel(i[0])
             ax.set_ylabel(i[1])
-        
+                    
         ax.grid(True)
-        legend = ax.legend(loc='upper left')#, shadow=True, fontsize='x-large')
+        legend = ax.legend(title="$r^2={:.3f}$".format(row['r_score']), 
+                           loc='upper left')
 
-    fig.set_size_inches(10, 15)
+    fig.set_size_inches(*figsize)
+    return fig
 
 df_ = df_results[lambda df: (df.index.get_level_values(1) == 'Brazil')].sort_values('r_score', ascending=False)
-plot_candidates(df_, over_days=False)
+fig1 = plot_candidates(df_, over_days=True)
 
-
-# %%
-def plot_candidates(df_candidates, nrows=4, ncols=2):
-    fig, axs = plt.subplots(nrows, ncols)
-    df_ = df_candidates.head(nrows * ncols)
-    for (i, row), ax in zip(df_.iterrows(), axs.flatten()):
-        ax.plot(row['x'], label=i[0])
-        ax.plot(row['y'], label=i[1])
-        ax.plot(row['predicted'], '--', label=f"{i[1]} (predicted)")
-        ax.title.set_text("$r^2={:.3f}$".format(row['r_score']))
-        
-        ax.grid(True)
-        legend = ax.legend(loc='upper left')#, shadow=True, fontsize='x-large')
-
-    fig.set_size_inches(10, 15)
-
-df_ = df_results[lambda df: (df.index.get_level_values(1) == 'Brazil')].sort_values('r_score', ascending=False)
-plot_candidates(df_)
-
-# %% execution={"iopub.status.busy": "2020-05-11T16:41:29.184699Z", "iopub.execute_input": "2020-05-11T16:41:29.185010Z", "iopub.status.idle": "2020-05-11T16:41:29.195118Z", "shell.execute_reply.started": "2020-05-11T16:41:29.184983Z", "shell.execute_reply": "2020-05-11T16:41:29.194325Z"}
-df_results.r_score[lambda s: s > 0.95]#.plot.hist(bins=30)
-
-
-# %% execution={"iopub.execute_input": "2020-05-10T20:12:10.928882Z", "iopub.status.busy": "2020-05-10T20:12:10.928684Z", "iopub.status.idle": "2020-05-10T20:12:11.025983Z", "shell.execute_reply": "2020-05-10T20:12:11.025202Z", "shell.execute_reply.started": "2020-05-10T20:12:10.928865Z"}
-def plot_predictions(df, df_results, col_1, col_2):
-    n_rows = df.shape[0]
-
-    arr_c1 = df[col_1].values
-    arr_c2 = df[col_2].values
-    arr_pred = df_results.loc[(col_1, col_2), 'predictions']
-    arr_pred = np.pad(arr_pred.flatten(), (0, n_rows-arr_pred.shape[0]),
-                      constant_values=np.nan)
-    df_ = pd.DataFrame([arr_c1, arr_c2, arr_pred]).T
-    df_.columns = [col_1, col_2, 'Predicted']
-    fig = df_.iplot(asFigure=True)
-    display(HTML(fig.to_html()))
-
-
-plot_predictions(df, df_results, 'India', 'Brazil')
-
-# %%
+# %% execution={"iopub.status.busy": "2020-05-11T17:51:14.242408Z", "iopub.execute_input": "2020-05-11T17:51:14.243323Z", "iopub.status.idle": "2020-05-11T17:51:15.176063Z", "shell.execute_reply.started": "2020-05-11T17:51:14.243241Z", "shell.execute_reply": "2020-05-11T17:51:15.175534Z"}
+fig2 = plot_candidates(df_, over_days=False)
