@@ -12,9 +12,6 @@
 #     name: python3
 # ---
 
-# %% [markdown] id="view-in-github" colab_type="text"
-# <a href="https://colab.research.google.com/github/luizvbo/notebooks/blob/master/The_Annotated_%22Attention_is_All_You_Need%22.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
-
 # %% [markdown] id="cSTdMB0-dSxy"
 # # Attention is all you need
 #
@@ -145,10 +142,15 @@ class LayerList(tf.keras.Model):
 # %% [markdown] id="euyRXbaMUgQR"
 # ## Encoder and Decoder Stacks
 #
-# ### Encoder:
+# %% [markdown] id="KWq05WUwHPJi"
+#
+# ### Encoder
 #
 # The encoder is composed of a stack of $N=6$ identical layers.
-# %% id="psiq5idJUgQT"
+#
+# Each layer has two sub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed-forward network.
+
+# %% id="dependent-granny"
 class Encoder(tf.keras.layers.Layer):
     "Core encoder is a stack of N layers"
     def __init__(self, h, N, d_model, d_ff, dropout):
@@ -219,26 +221,7 @@ class SublayerConnection(tf.keras.layers.Layer):
         return x + self.dropout(sublayer(self.norm(x)))
 
 
-# %% [markdown] id="ZduB6mIlUgQa"
-# Each layer has two sub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed-forward network.
-
-# %% id="0mEBw9tIUgQb"
-class EncoderLayer(tf.keras.layers.Layer):
-    "Encoder is made up of two sublayers, self-attn and feed forward (defined below)"
-    def __init__(self, size, self_attn, feed_forward, dropout):
-        super(EncoderLayer, self).__init__()
-        self.self_attn = self_attn
-        self.feed_forward = feed_forward
-        self.sublayer = LayerList(SublayerConnection(size, dropout), 2)
-        self.size = size
-
-    def forward(self, x, mask):
-        "Follow Figure 1 (left) for connections."
-        x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask))
-        return self.sublayer[1](x, self.feed_forward)
-
-
-# %% [markdown] id="iHOZnpnBUgQd"
+# %% [markdown] id="professional-scott"
 # ### Decoder
 #
 # The decoder is also composed of a stack of $N=6$ identical layers.
@@ -373,7 +356,7 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
         self.d_k = d_model // h
         self.h = h
         self.rate = dropout
-        self.linears = LayerList(tf.keras.layers.Dense(d_model, d_model), 4)
+        self.linears = LayerList(tf.keras.layers.Dense((d_model, d_model)), 4)
         self.attn = None
 
     def forward(self, query, key, value, mask=None):
@@ -427,8 +410,8 @@ class PositionwiseFeedForward(tf.keras.layers.Layer):
     def __init__(self, d_model, d_ff, dropout=0.1):
         super(PositionwiseFeedForward, self).__init__()
         # Torch linears have a `b` by default.
-        self.w_1 = tf.keras.layers.Dense(d_model, d_ff)
-        self.w_2 = tf.keras.layers.Dense(d_ff, d_model)
+        self.w_1 = tf.keras.layers.Dense((d_model, d_ff))
+        self.w_2 = tf.keras.layers.Dense((d_ff, d_model))
         self.dropout = t.keras.layers.Dropout(dropout)
 
     def forward(self, x):
