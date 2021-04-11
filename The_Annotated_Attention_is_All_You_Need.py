@@ -162,9 +162,10 @@ class Encoder(tf.keras.layers.Layer):
 
     def call(self, x, mask):
         "Pass the input (and mask) through each layer in turn."
-        for layer in self.layers:
-            x = layer(x, mask)
-        return self.norm(x)
+        output = self.layers(x, mask)
+        # for layer in self.layers:
+        #     x = layer(x, mask)
+        return self.norm(output)
 
 
 class EncoderLayer(tf.keras.layers.Layer):
@@ -232,26 +233,29 @@ class SublayerConnection(tf.keras.layers.Layer):
 # %% id="3o_ZB42sUgQd"
 class Decoder(tf.keras.layers.Layer):
     "Generic N layer decoder with masking."
-    def __init__(self, layer, N):
+    def __init__(self, h, N, d_model, d_ff, dropout):
         super(Decoder, self).__init__()
-        self.layers = LayerList(layer, N)
-        self.norm = LayerNorm(layer.size)
+        self.layers = LayerList(
+            DecoderLayer(h, d_model, d_ff, dropout), N
+        )
+        self.norm = LayerNorm(d_model)
 
-    def forward(self, x, memory, src_mask, tgt_mask):
-        for layer in self.layers:
-            x = layer(x, memory, src_mask, tgt_mask)
-        return self.norm(x)
+    def call(self, x, memory, src_mask, tgt_mask):
+        output = self.layers(x, memory, src_mask, tgt_mask)
+        # for layer in self.layers:
+        #     x = layer(x, memory, src_mask, tgt_mask)
+        return self.norm(output)
 
 
 class DecoderLayer(tf.keras.layers.Layer):
     "Decoder is made up of three sublayers, self-attn, src-attn, and feed forward (defined below)"
-    def __init__(self, size, self_attn, src_attn, feed_forward, dropout):
+    def __init__(self, h, d_model, d_ff, dropout):
         super(DecoderLayer, self).__init__()
-        self.size = size
-        self.self_attn = self_attn
-        self.src_attn = src_attn
-        self.feed_forward = feed_forward
-        self.sublayer = LayerList(SublayerConnection(size, dropout), 3)
+        self.self_attn = MultiHeadedAttention(h, d_model, dropout)
+        self.src_attn = MultiHeadedAttention(h, d_model, dropout)
+        self.feed_forward = PositionwiseFeedForward(d_model, d_ff, dropout)
+        self.sublayer = LayerList(SublayerConnection(d_model, dropout), 3)
+        self.size = d_model
 
     def forward(self, x, memory, src_mask, tgt_mask):
         "Follow Figure 1 (right) for connections."
@@ -356,7 +360,7 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
         self.d_k = d_model // h
         self.h = h
         self.rate = dropout
-        self.linears = LayerList(tf.keras.layers.Dense((d_model, d_model)), 4)
+        self.linears = LayerList(tf.keras.layers.Dense(d_model), 4)
         self.attn = None
 
     def forward(self, query, key, value, mask=None):
@@ -410,9 +414,9 @@ class PositionwiseFeedForward(tf.keras.layers.Layer):
     def __init__(self, d_model, d_ff, dropout=0.1):
         super(PositionwiseFeedForward, self).__init__()
         # Torch linears have a `b` by default.
-        self.w_1 = tf.keras.layers.Dense((d_model, d_ff))
-        self.w_2 = tf.keras.layers.Dense((d_ff, d_model))
-        self.dropout = t.keras.layers.Dropout(dropout)
+        self.w_1 = tf.keras.layers.Dense(d_ff)
+        self.w_2 = tf.keras.layers.Dense(d_model)
+        self.dropout = tf.keras.layers.Dropout(dropout)
 
     def forward(self, x):
         return self.w_2(self.dropout(tf.nn.relu(self.w_1(x))))
