@@ -108,7 +108,7 @@ class Transformer(tf.keras.Model):
             Embeddings(d_model, output_vocab),
             PositionalEncoding(d_model, dropout)
         )
-        self.generator = generator
+        self.generator = Generator(d_model, output_vocab)
 
     def call(self, src, tgt, src_mask, tgt_mask):
         "Take in and process masked src and target sequences."
@@ -498,10 +498,10 @@ class Generator(tf.keras.layers.Layer):
     "Standard generation step. (Not described in the paper.)"
     def __init__(self, d_model, vocab):
         super(Generator, self).__init__()
-        self.proj = nn.Linear(d_model, vocab)
+        self.proj = tf.keras.layers.Dense(vocab)
 
-    def forward(self, x):
-        return F.log_softmax(self.proj(x), dim=-1)
+    def call(self, x):
+        return tf.nn.log_softmax(self.proj(x), dim=-1)
 
 
 # %% id="0i97-Y7AUgQ8"
@@ -540,7 +540,7 @@ def make_model(
 
 # %% id="qP-g4KfhUgQ_" colab={"base_uri": "https://localhost:8080/", "height": 3023} outputId="e5d671a2-a9d4-461b-f08c-bf5b7a4ddb73"
 # Small example model.
-tmp_model = make_model(10, 10, 2)
+tmp_model = Transformer(10, 10, 2)
 tmp_model
 
 
